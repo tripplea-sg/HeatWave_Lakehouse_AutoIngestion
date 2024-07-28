@@ -1,0 +1,30 @@
+#!/bin/bash
+
+mount_point=$(cat $PFILE | grep mount_point | sed 's/=/ /g' | awk '{print $2}')
+workflow_dir=$(cat $PFILE | grep workflow | sed 's/=/ /g' | awk '{print $2}')
+worker_dir=$(cat $PFILE | grep worker_dir | sed 's/=/ /g' | awk '{print $2}')
+
+echo "Start checking on Arrive folder" > $workflow_dir/stage.lst
+
+find $mount_point/data -type d | grep / | sed 's/\.\///g' | grep / | grep $mount_point/data/ | sed 's/\/data\//\/arrive\//g' | awk '{print "mkdir -p "$1}' > $workflow_dir/add_to_arrive.sh
+
+chmod u+x $workflow_dir/add_to_arrive.sh
+$workflow_dir/add_to_arrive.sh
+rm $workflow_dir/add_to_arrive.sh
+
+find $mount_point/data -type d | grep / | sed 's/\.\///g' | grep / | sed 's/\/data/\/arrive/g' > $workflow_dir/check_data.lst
+find $mount_point/arrive -type d | grep / | sed 's/\.\///g' | grep / > $workflow_dir/check_arrive.lst
+comm -23 <(sort $workflow_dir/check_arrive.lst) <(sort $workflow_dir/check_data.lst) | awk '{print "rm -Rf "$1}' > $workflow_dir/delete_from_arrive.sh
+chmod u+x $workflow_dir/delete_from_arrive.sh
+$workflow_dir/delete_from_arrive.sh
+rm $workflow_dir/check_data.lst
+rm $workflow_dir/check_arrive.lst
+rm $workflow_dir/delete_from_arrive.sh
+
+find $mount_point/arrive -type f | grep csv > $workflow_dir/list_arrive_csv.lst
+for file in $(cat $workflow_dir/list_arrive_csv.lst); do
+	if [ $(ps -ef | grep c_action | grep $file | grep -v grep | wc -l) -eq 0 ]; then
+		$worker_dir/c_action $file &
+	fi
+done;
+echo "End checking on Arrive folder" > $workflow_dir/stage.lst
