@@ -1,0 +1,22 @@
+#!/bin/bash
+
+mount_point=$(cat $PFILE | grep mount_point | sed 's/=/ /g' | awk '{print $2}')
+bucket=$(cat $PFILE | grep bucket | sed 's/=/ /g' | awk '{print $2}')
+region=$(cat $PFILE | grep region | sed 's/=/ /g' | awk '{print $2}')
+passwd_file=$(cat $PFILE | grep passwd_file | sed 's/=/ /g' | awk '{print $2}')
+namespace=$(cat $PFILE | grep namespace | sed 's/=/ /g' | awk '{print $2}')
+recursive_count=$(cat $PFILE | grep recursive_count | sed 's/=/ /g' | awk '{print $2}')
+recursive_interval=$(cat $PFILE | grep recursive_interval | sed 's/=/ /g' | awk '{print $2}')
+
+t=$((0))
+while [ $t -eq 0 ]
+do
+        if [ $(df -h | grep $mount_point | wc -l) -eq 0 ]; then
+                mkdir -p $mount_point
+                s3fs $bucket $mount_point -o endpoint=$region -o passwd_file=$passwd_file -o url=https://$namespace.compat.objectstorage.$region.oraclecloud.com/ -onomultipart -o use_path_request_style
+        fi
+        sleep $recursive_interval
+        if [ $(ps -ef | grep c_instance | grep -v grep | wc -l) -eq 0 ]; then
+                t=$((1))
+        fi;
+done
