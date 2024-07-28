@@ -57,3 +57,5 @@ If the table needs to be refreshed always, then do not run mysql_autoingest_admi
 Simply download the CSV from the server or edit the CSV using vi / vim text editor on Compute, then change the value inside the CSV. Re-upload the CSV using same name into the respective folder arrive.
 For example: /home/opc/lakehouse/arrive/INV/MTL_MATERIAL_TRANSACTIONS </br>
 The original CSV in /home/opc/lakehouse/data/INV/MTL_MATERIAL_TRANSACTIONS will get replaced automatically and incremental refresh runs to update data in lakehouse table.
+## Footnote
+If the CSV file is big, recommend to stop autoingestion before copying and start again the autoingestion after copy end.
