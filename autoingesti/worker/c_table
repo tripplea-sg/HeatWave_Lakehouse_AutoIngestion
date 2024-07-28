@@ -1,0 +1,30 @@
+#!/bin/bash
+  
+username=$(cat $PFILE | grep username | sed 's/=/ /g' | awk '{print $2}')
+password=$(cat $PFILE | grep password | sed 's/=/ /g' | awk '{print $2}')
+server=$(cat $PFILE | grep server | sed 's/=/ /g' | awk '{print $2}')
+port=$(cat $PFILE | grep port | sed 's/=/ /g' | awk '{print $2}')
+bucket=$(cat $PFILE | grep bucket_name | sed 's/=/ /g' | awk '{print $2}')
+region=$(cat $PFILE | grep region | sed 's/=/ /g' | awk '{print $2}')
+namespace=$(cat $PFILE | grep namespace | sed 's/=/ /g' | awk '{print $2}')
+mount_point=$(cat $PFILE | grep mount_point | sed 's/=/ /g' | awk '{print $2}')
+workflow_dir=$(cat $PFILE | grep workflow | sed 's/=/ /g' | awk '{print $2}')
+worker_dir=$(cat $PFILE | grep worker_dir | sed 's/=/ /g' | awk '{print $2}')
+
+echo "Start creating lakehouse table" > $workflow_dir/stage.lst
+
+cat /dev/null > $workflow_dir/create_table.sql
+cp $workflow_dir/new_table.lst $workflow_dir/new_table.temp
+for x in `cat $workflow_dir/new_table.temp`; do
+	table=$(echo $x | sed 's/\./ /g' | awk '{print $2}')
+	schema=$(echo $x | sed 's/\./ /g' | awk '{print $1}')
+	cat $worker_dir/ingest.sql | sed "s/v_comp/$schema/g" | sed "s/v_segment/$table/g" | sed "s/v_bucket/$bucket/g" | sed "s/v_region/$region/g" | sed "s/v_namespace/$namespace/g" >> $workflow_dir/create_table.sql
+done
+
+mysqlsh -u$username -p$password -h$server -P$port --sqlc -e "source $workflow_dir/create_table.sql"
+
+echo "End creating lakehouse table" > $workflow_dir/stage.lst
+
+for tablename in $(cat $workflow_dir/new_table.temp); do
+        sed -i "/$tablename/d" $workflow_dir/new_table.lst
+done;

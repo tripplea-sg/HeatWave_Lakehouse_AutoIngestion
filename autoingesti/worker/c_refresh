@@ -1,0 +1,45 @@
+#!/bin/bash
+
+username=$(cat $PFILE | grep username | sed 's/=/ /g' | awk '{print $2}')
+password=$(cat $PFILE | grep password | sed 's/=/ /g' | awk '{print $2}')
+server=$(cat $PFILE | grep server | sed 's/=/ /g' | awk '{print $2}')
+port=$(cat $PFILE | grep port | sed 's/=/ /g' | awk '{print $2}')
+mount_point=$(cat $PFILE | grep mount_point | sed 's/=/ /g' | awk '{print $2}')
+workflow_dir=$(cat $PFILE | grep workflow | sed 's/=/ /g' | awk '{print $2}')
+worker_dir=$(cat $PFILE | grep worker_dir | sed 's/=/ /g' | awk '{print $2}')
+
+bucket=$(cat $PFILE | grep bucket_name | sed 's/=/ /g' | awk '{print $2}')
+region=$(cat $PFILE | grep region | sed 's/=/ /g' | awk '{print $2}')
+namespace=$(cat $PFILE | grep namespace | sed 's/=/ /g' | awk '{print $2}')
+
+echo "Start refreshing database tables" > $workflow_dir/stage.lst
+
+cp $workflow_dir/refresh_db.lst $workflow_dir/refresh_db.temp
+cp $workflow_dir/refresh_table.lst $workflow_dir/refresh_table.temp
+
+for dbname in $(mysqlsh -u$username -h$server -p$password -P$port --sqlc -e "select distinct db_name from mysql_autoingest_admin.refresh_manager;" | grep -v db_name); do
+	echo $dbname >> $workflow_dir/refresh_db.temp
+done;
+
+for tablename in $(mysqlsh -u$username -h$server -p$password -P$port --sqlc -e "select distinct concat(db_name,'.',table_name) from mysql_autoingest_admin.refresh_manager;" | grep -v db_name); do
+	echo $tablename >> $workflow_dir/refresh_table.temp
+done;
+
+vdb=$(cat $workflow_dir/refresh_db.temp | awk '{print "\""$1"\""}' | sort | uniq | tr '\n' ',' | sed 's/.$//' )
+vtab=$(cat $workflow_dir/refresh_table.temp | awk '{print "'\''"$1"'\''"}' | sort | uniq | tr '\n' ',' | sed 's/.$//')
+
+mysqlsh -u$username -h$server -p$password -P$port --sql << EOF
+SET @db_list = '[$vdb]';
+SET @options = JSON_OBJECT('mode','normal','refresh_external_tables', TRUE,'include_list',JSON_ARRAY($vtab));
+CALL sys.heatwave_load(@db_list, @options);
+EOF
+
+echo "End refreshing database tables" > $workflow_dir/stage.lst
+
+for dbname in $(cat $workflow_dir/refresh_db.temp); do
+        sed -i "/$dbname/d" $workflow_dir/refresh_db.lst
+done;
+
+for tablename in $(cat $workflow_dir/refresh_table.temp); do
+        sed -i "/$tablename/d" $workflow_dir/refresh_table.lst
+done;

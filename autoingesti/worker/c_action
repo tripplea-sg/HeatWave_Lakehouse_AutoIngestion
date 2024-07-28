@@ -1,0 +1,36 @@
+#!/bin/bash
+
+mount_point=$(cat $PFILE | grep mount_point | sed 's/=/ /g' | awk '{print $2}')
+workflow_dir=$(cat $PFILE | grep workflow | sed 's/=/ /g' | awk '{print $2}')
+file=$1
+
+table_name=$(echo $file | sed 's/\// /g' | awk '{print $6}')
+schema_name=$(echo $file | sed 's/\// /g' | awk '{print $5}')
+
+file_name=$(echo $file | sed 's/\// /g' | awk '{print $7}')
+
+if [ $(head -1 $file | grep file_name | wc -l) -eq 0 ]; then
+	sed -i "s/$/|$file_name/g" $file
+	sed -i "1 s/$file_name/file_name/g" $file
+fi
+
+cp $mount_point/arrive/$schema_name/$table_name/$file_name $mount_point/data/$schema_name/$table_name/
+rm $mount_point/arrive/$schema_name/$table_name/$file_name
+
+if [ $(find $mount_point/data/$schema_name/$table_name -type f | grep -v $file_name | wc -l) -eq 0 ]; then
+ 	if [ $(cat $workflow_dir/new_table.lst | grep $(echo "$schema_name.$table_name") | wc -l) -eq 0 ]; then
+    		echo "$schema_name.$table_name" >> $workflow_dir/new_table.lst
+         	echo "$schema_name.$table_name" >> $workflow_dir/refresh_table.lst
+       		if [ $(cat $workflow_dir/new_db.lst | grep $schema_name | wc -l) -eq 0 ]; then
+             		echo "$schema_name" >> $workflow_dir/new_db.lst
+           		echo "$schema_name" >> $workflow_dir/refresh_db.lst
+            	fi
+    	fi
+else
+	if [ $(cat $workflow_dir/refresh_table.lst | grep $(echo "$schema_name.$table_name") | wc -l) -eq 0 ]; then
+		echo "$schema_name.$table_name" >> $workflow_dir/refresh_table.lst
+          	if [ $(cat $workflow_dir/refresh_db.lst | grep $schema_name | wc -l) -eq 0 ]; then
+            		echo "$schema_name" >> $workflow_dir/refresh_db.lst
+           	fi
+    	fi
+fi
